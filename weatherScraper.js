@@ -1,38 +1,54 @@
-import puppeteer from 'puppeteer';
+import {chromium} from "playwright";
 
-const city = process.argv[2];
+const country = (process.argv[2]).toLowerCase();
+const city = (process.argv[3]).toLowerCase();
 
-async function scrapeWeather(cityName) {
-    const browser = await puppeteer.launch({ headless: true }); // Set headless to true to run without opening a browser
+async function setBrowser() {
+    const browser = await chromium.launch({ headless: false });
     const page = await browser.newPage();
+    await page.setViewportSize({ width: 1280, height: 800 });
+    return { browser, page };
+}
 
-    const url = `https://openweathermap.org/find?q=${cityName}`;
+async function navigateAndScrape(page, country, city) {
+    const url = `https://www.timeanddate.com/weather/${country}/${city}/ext`;
+    await page.goto(url, { waitUntil: "domcontentloaded" });
+    await page.waitForSelector("#wt-ext", { timeout: 20000 });
 
-    await page.goto(url, { waitUntil: 'networkidle2' });
+    return await page.evaluate(() => {
+        const table = document.querySelector("#wt-ext");
+        if (!table) return null;
+        const rows = Array.from(table.querySelectorAll("tbody tr"));
+        return rows.map(row => {
+            const cells = row.querySelectorAll("th, td");
+            return {
+                day: cells[0]?.innerText.trim(),
+                temperature: cells[2]?.innerText.trim(),
+                weather: cells[3]?.innerText.trim(),
+                feels_like: cells[4]?.innerText.trim(),
+                wind: cells[5]?.innerText.trim(),
+                humidity: cells[7]?.innerText.trim(),
+                precipitation_chance: cells[8]?.innerText.trim(),
+                precipitation_amount: cells[9]?.innerText.trim(),
+                uv: cells[10]?.innerText.trim(),
+                sunrise: cells[11]?.innerText.trim(),
+                sunset: cells[12]?.innerText.trim()
+            };
+        });
+    });
+}
 
+async function main(country, city) {
     try {
-        await page.waitForSelector('.table td a', { timeout: 5000 });
-        await page.click('.table td a');
+        const { browser, page } = await setBrowser();
+        const data = await navigateAndScrape(page, country, city);
+        await browser.close();
+        console.log(JSON.stringify(data));
     } catch (error) {
-        await browser.close();
-        return "City not found!";
-    }
-
-    try {
-        await page.waitForSelector('.current-temp span', { timeout: 5000 });
-        const temperature = await page.$eval('.current-temp span', el => el.textContent);
-        await browser.close();
-        return temperature.replace('°C', ''); // Remove the '°C' from the output
-    } catch (error) {
-        await browser.close();
-        return "Weather data not found!";
+        console.error("Scraping failed:", error);
     }
 }
 
-scrapeWeather(city).then(temp => {
-    console.log(temp); // This will now only log the temperature
-    process.exit();
-}).catch(err => {
-    console.error('Error:', err);
-    process.exit(1);
-});
+(async () => {
+    await main(country, city);
+})();
