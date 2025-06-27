@@ -287,5 +287,3 @@ This project is part of the TripGenie application. Please refer to the main proj
 ---
 
 *Last updated: June 2025*
-
-**Tip**: For automated weather monitoring, consider adding this scraper to a cron job or scheduled task with appropriate rate limiting.
